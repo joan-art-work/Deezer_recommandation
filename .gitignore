@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# sorties générées par deezer_tool.py
+deezer_*.csv
+deezer_profile_*.json
