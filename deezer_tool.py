@@ -7,13 +7,16 @@ Contrat tool-call :
   * stdlib uniquement, aucune dependance
 
 Sous-commandes :
-  profile USER_ID [--lastfm KEY] [--outdir DIR]
+  profile [USER_ID] [--lastfm KEY] [--outdir DIR]
       Dump complet (CSV) + profil de gouts compact (JSON) -> stdout.
   verify --input FICHIER | --tracks "Titre - Artiste; Titre - Artiste"
       Verifie que des titres proposes (par une IA) existent sur Deezer.
       Sortie : lien, preview 30s, statut found/not_found/approx.
-  enrich USER_ID [--max N]
+  enrich [USER_ID] [--max N]
       Donnees track-level des favoris : bpm, gain, isrc, date de sortie.
+
+USER_ID est optionnel : a defaut, DEEZER_USER_ID est lu depuis l'environnement
+ou un fichier .env (voir .env.example).
   trends [--genre-id N] [--limit N]
       Charts Deezer (0 = tous genres). Ex : 116 = Rap/Hip Hop.
   releases [--genre-id N] [--limit N]
@@ -23,7 +26,7 @@ Sous-commandes :
       Recherche avancee (filtres artist:/track:/album:/label: acceptes dans QUERY).
 
 Exemples :
-  python deezer_tool.py profile 2770287342
+  python deezer_tool.py profile            # DEEZER_USER_ID depuis .env
   python deezer_tool.py verify --tracks "Exutoire - Damso; Tricheur - Nekfeu"
   python deezer_tool.py search 'artist:"damso"' --bpm-min 130 --strict
   python deezer_tool.py trends --genre-id 116 --limit 20
@@ -45,6 +48,35 @@ PAUSE = 0.12  # rate limit Deezer : 50 req / 5 s
 # ---------------------------------------------------------------- helpers
 def log(msg):
     print(msg, file=sys.stderr, flush=True)
+
+
+def load_dotenv():
+    """Charge un .env (KEY=VALUE) sans ecraser l'environnement existant.
+    Cherche dans le cwd puis dans le dossier du script."""
+    candidates = [os.path.join(os.getcwd(), ".env"),
+                  os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")]
+    for path in candidates:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key, val = key.strip(), val.strip().strip("'\"")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+        return
+
+
+def resolve_user_id(args):
+    uid = args.user_id or os.environ.get("DEEZER_USER_ID", "")
+    if not uid:
+        out_json({"error": "USER_ID manquant : passer en argument ou definir "
+                           "DEEZER_USER_ID (env ou fichier .env)"})
+        sys.exit(1)
+    return uid
 
 
 def fetch(url):
@@ -86,7 +118,7 @@ def month(ts):
 
 # ---------------------------------------------------------------- profile
 def cmd_profile(args):
-    uid, outdir = args.user_id, args.outdir
+    uid, outdir = resolve_user_id(args), args.outdir
     os.makedirs(outdir, exist_ok=True)
 
     log("Favoris...")
@@ -352,7 +384,7 @@ def cmd_verify(args):
 
 # ---------------------------------------------------------------- enrich
 def cmd_enrich(args):
-    uid = args.user_id
+    uid = resolve_user_id(args)
     log("Favoris...")
     favs = list(paginate(f"{API}/user/{uid}/tracks?limit=200"))
     if args.max:
@@ -432,11 +464,13 @@ def cmd_search(args):
 
 # ---------------------------------------------------------------- main
 def main():
+    load_dotenv()
     p = argparse.ArgumentParser(description="Outils Deezer sans token (tool-call friendly)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sp = sub.add_parser("profile", help="dump + profil de gouts")
-    sp.add_argument("user_id")
+    sp.add_argument("user_id", nargs="?", default=None,
+                    help="defaut : DEEZER_USER_ID (env ou .env)")
     sp.add_argument("--lastfm", default=os.environ.get("LASTFM_API_KEY", ""),
                     help="cle API Last.fm (ou env LASTFM_API_KEY)")
     sp.add_argument("--outdir", default=".")
@@ -448,7 +482,8 @@ def main():
     sv.set_defaults(fn=cmd_verify)
 
     se = sub.add_parser("enrich", help="bpm/gain/isrc/date par titre (favoris)")
-    se.add_argument("user_id")
+    se.add_argument("user_id", nargs="?", default=None,
+                    help="defaut : DEEZER_USER_ID (env ou .env)")
     se.add_argument("--max", type=int, default=0,
                     help="limiter aux N favoris les plus recents")
     se.set_defaults(fn=cmd_enrich)

@@ -13,14 +13,14 @@ CLI Deezer sans token, conçu pour être appelé par Claude Code via `python dee
 ## Sous-commandes
 
 ```
-profile USER_ID [--lastfm KEY] [--outdir DIR]
+profile [USER_ID] [--lastfm KEY] [--outdir DIR]
     Dump complet (CSV) + profil de goûts compact (JSON) → stdout.
 
 verify --input FICHIER | --tracks "Titre - Artiste; Titre - Artiste"
     Vérifie que des titres proposés (par une IA) existent sur Deezer.
     Sortie : lien, preview 30s, statut found/not_found/approx.
 
-enrich USER_ID [--max N]
+enrich [USER_ID] [--max N]
     Données track-level des favoris : bpm, gain, isrc, date de sortie.
 
 trends [--genre-id N] [--limit N]
@@ -37,15 +37,21 @@ search QUERY [--bpm-min N] [--bpm-max N] [--dur-min N] [--dur-max N]
 ## Exemples
 
 ```bash
-python deezer_tool.py profile 2770287342
+python deezer_tool.py profile          # DEEZER_USER_ID lu depuis .env
 python deezer_tool.py verify --tracks "Exutoire - Damso; Tricheur - Nekfeu"
 python deezer_tool.py search 'artist:"damso"' --bpm-min 130 --strict
 python deezer_tool.py trends --genre-id 116 --limit 20
 ```
 
+## Configuration
+
+L'ID utilisateur Deezer n'est pas dans le code : copier `.env.example` vers `.env`
+et renseigner `DEEZER_USER_ID` (et `LASTFM_API_KEY` en option). `USER_ID` passé en
+argument CLI reste prioritaire sur le `.env`.
+
 ## Workflow recommandé
 
-1. **Analyser le profil** : `profile USER_ID` → JSON complet avec genres, artistes, deep cuts, zone d'exploration.
+1. **Analyser le profil** : `profile` → JSON complet avec genres, artistes, deep cuts, zone d'exploration.
 2. **Proposer des titres** → les vérifier avec `verify` avant de les présenter à l'utilisateur.
 3. **Enrichir** : `enrich` pour obtenir BPM/ISRC si nécessaire pour des recommandations tempo-based.
 4. **Découverte** : `trends` ou `releases` pour les nouveautés, `search` pour cibler par critères.
